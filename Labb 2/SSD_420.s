@@ -8,7 +8,6 @@
 .global _start
 _start:
 	LDR r0, =DISPLAY_1
-    // Combine digits 4, 2, and 0 into a single 32-bit value
     MOV r1, #0x66              // Hex pattern for 4
     LSL r1, r1, #16            // Shift 4 to the 3rd display position
     MOV r2, #0x5B              // Hex pattern for 2

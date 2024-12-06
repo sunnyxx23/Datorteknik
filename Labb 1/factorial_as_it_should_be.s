@@ -2,8 +2,12 @@
 .equ UART_BASE, 0xff201000     // UART base address
 .equ UART_CONTROL_REG_OFFSET, 4 // UART control register
 .equ STACK_BASE, 0x10000000      // stack beginning
-
 .equ NEW_LINE, 0x0A
+
+.data
+facto_numbers:
+	.word 1,2,3,4,5,6,7,8,9,10,0
+
 
 .global _start
 .text
@@ -71,24 +75,36 @@ print_number:
     STR r0, [r2]
     POP {r0-r5, pc}
 
+next:
+	MOV r0, #1
+	LDR r2, [r1] // r1:th elem in arr = 1
+	CMP r2, #0
+	BEQ _end
+	BL factorial
+	BL print_number
+
+	ADD r1, r1, #4 // go to next number in arr
+	B next
+
 factorial:
-    CMP r0, #1
-    BLE base_case
-    PUSH {r0, lr}
-    MOV r1, r0
-    SUB r0, r0, #1
-    BL factorial
-    POP {r0, lr}
-    MUL r0, r0, r1
-    BX lr
+	PUSH {lr}
+    CMP r2, #1          // Compare r2 with 1
+    BLE return          // If r2 <= 1, branch to return
+	PUSH {r2}
+    SUB r2, r2, #1      // r2 = r2 - 1
+    BL factorial        // Recursive call to factorial
+	POP {r2}
+	MUL r0, r0, r2      // r0 = r0 * r2
 
-    base_case:
-    MOV r0, #1
-    BX lr
-
+return:
+    POP {pc}
+    
 _start:
-    LDR r0, =4
-    BL factorial
-    BL print_number
+	LDR sp, =STACK_BASE
+	LDR r1, =facto_numbers
+	B next
+	
+_end:
+	BAL _end
 
-    B .
+.end

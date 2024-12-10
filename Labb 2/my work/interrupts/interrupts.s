@@ -21,7 +21,8 @@
 .data
 hex_patterns: // 0-9, A-F
 	.word 0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F, 0x77, 0x7C, 0x39, 0x5E, 0x79, 0x71
-
+counter:
+	.word 0x0 // index
 
 .text // Code section
 .org 0x00  // Address of interrupt vector
@@ -47,20 +48,28 @@ _start:
     // R0: The Interrupt ID to enable (only one supported for now)
     MOV R0, #80  // UART Interrupt ID = 80
     BL CONFIG_GIC // configure the ARM GIC
+	
+	LDR R0, =BTN_BASE
+	LDR R1, =0xF
+	STR R1, [R0, #0x08]
 
-// Initialize the UART with receive interrupts enabled
+	// Initialize the UART with receive interrupts enabled
     LDR R0, =UART_CONTROL_REGISTER
     MOV R1, #0x1 // enable REceive interrupts
     STR R1, [R0]
 
-
+	LDR R0, =DISPLAYS_BASE
+	LDR R2, =hex_patterns
+	LDR R4, [R2]
+	STR R4, [R0]
+	
    /* 4. Change to the processor mode for the main program loop (for example supervisor mode) */
     /* 5. Enable the processor interrupts (IRQ in our case) */
     MSR CPSR_c, #0b01010011  // IRQ unmasked, MODE = SVC
 
 _main:
     B _main  // Just wait for interrupts to handle!
- 
+
 
 SERVICE_IRQ:
     PUSH {R0-R7, LR}
@@ -68,8 +77,24 @@ SERVICE_IRQ:
     /* Read and acknowledge the interrupt at the GIC: Read the ICCIAR from the CPU Interface */
     LDR R4, =GIC_CPU_INTERFACE_BASE  // 0xFFFEC100
     LDR R5, [R4, #0x0C] // read current Interrupt ID from ICCIAR
+	
+	CHECK_BUTTON_INTERRUPT:
+		CMP R5, #73           // Check if interrupt is from buttons (Interrupt ID = 73)
+		BNE SERVICE_IRQ_DONE  // Skip if not button interrupt
 
-    /* 2. Check which device raised the interrupt */
+		LDR R0, =BTN_BASE
+		LDR R1, [R0, #0x0C]   // Read Edgecapture register
+
+		TST R1, #0x1          // Check if button 0 is pressed
+		BNE inc               // If yes, call increment routine
+
+		TST R1, #0x2          // Check if button 1 is pressed
+		BNE dec               // If yes, call decrement routine
+
+		STR R1, [R0, #0x0C]   // Clear Edgecapture by writing back
+		B SERVICE_IRQ_DONE
+	
+	
 CHECK_UART_INTERRUPT:
     CMP R5, #80  // UART Interrupt ID
 
@@ -149,6 +174,24 @@ CONFIG_GIC:
     STR R1, [R0]
     POP {PC}
 
+inc:
+	PUSH {r1-r4, lr}
+	ADD r3, r3, #1
+	CMP r3, #15
+	MOVGT r3, #0
+	B update_display
+
+dec:
+	SUB r3, r3, #1
+	CMP r3, #0
+	MOVLT r3, #15
+	B update_display
+
+update_display:
+	ADD r4, r2, r3, LSL #2
+	LDR r4, [r4]
+	STR r4, [r1]
+	POP {r1-r4, pc}
 
 /*********************************************************************
     HELP FUNCTION!

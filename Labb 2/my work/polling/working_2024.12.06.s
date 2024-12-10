@@ -18,8 +18,8 @@ _start:
 	LDR	r1, =DISPLAY_1
 	LDR r2, =hex_patterns
 	MOV r3, #0
-	LDR r4, [r2]            // first element in r3 (0x3F = 0)
-	STR r4, [r1]            // write value in r5 to SSD
+	LDR r4, [r2]            // first element in r2 (0x3F = 0)
+	STR r4, [r1]            // write value in r4 to SSD
 
 poll_loop:
 	LDR r5, [r0]            // Read UART status register

@@ -1,4 +1,4 @@
-// should have push button support, but doesn't
+// wack ass error when push button goes from on-off
 
 /******************************************************************************
     Define symbols
@@ -15,6 +15,7 @@
 .equ LED_BASE, 0xff200000
 .equ SW_BASE, 0xff200040
 .equ BTN_BASE, 0xff200050
+.equ BTN_MASK, 0xff200058 // mask bits
 .equ DISPLAYS_BASE, 0xff200020
 .equ UART_BASE, 0xff201000
 .equ UART_DATA_REGISTER, 0xff201000
@@ -48,7 +49,7 @@ _start:
 	
 	   /* 2. Configure the Generic Interrupt Controller (GIC). Use the given help function CONFIG_GIC! */
     // R0: The Interrupt ID to enable (only one supported for now)
-    MOV R0, #80  // UART Interrupt ID = 80
+    MOV R0, #73  // UART Interrupt ID = 80
     BL CONFIG_GIC // configure the ARM GIC
 	
 	LDR R0, =BTN_BASE
@@ -63,7 +64,7 @@ _start:
 	LDR R0, =DISPLAYS_BASE
 	LDR R2, =hex_patterns
 	LDR R4, [R2]
-	STR R4, [R0]
+	STR R4, [R0]  
 	
    /* 4. Change to the processor mode for the main program loop (for example supervisor mode) */
     /* 5. Enable the processor interrupts (IRQ in our case) */
@@ -88,14 +89,16 @@ CHECK_BUTTON_INTERRUPT:
     LDR R1, [R0, #0x0C]   // Read Edgecapture register
 
     TST R1, #0x1          // Check if button 0 is pressed
-    BEQ inc               // If yes, call increment routine
+    BNE inc               // If yes, call increment routine
 
     TST R1, #0x2          // Check if button 1 is pressed
-    BEQ dec               // If yes, call decrement routine
+    BNE dec			      // If yes, call decrement routine
 
+	TST R1, #0x3
+	BNE _end
+	
     STR R1, [R0, #0x0C]   // Clear Edgecapture by writing back
     B SERVICE_IRQ_DONE
-	
 	
 CHECK_UART_INTERRUPT:
     CMP R5, #80  // UART Interrupt ID
@@ -176,25 +179,6 @@ CONFIG_GIC:
     STR R1, [R0]
     POP {PC}
 
-inc:
-	PUSH {r1-r4, lr}
-	ADD r3, r3, #1
-	CMP r3, #15
-	MOVGT r3, #0
-	B update_display
-
-dec:
-	SUB r3, r3, #1
-	CMP r3, #0
-	MOVLT r3, #15
-	B update_display
-
-update_display:
-	ADD r4, r2, r3, LSL #2
-	LDR r4, [r4]
-	STR r4, [r1]
-	POP {r1-r4, pc}
-
 /*********************************************************************
     HELP FUNCTION!
     --------------
@@ -237,3 +221,27 @@ CONFIG_INTERRUPT:
      * (only) the appropriate byte */
     STRB R1, [R4]
     POP {R4-R5, PC}
+
+inc:
+	PUSH {lr}
+	ADD r3, r3, #1
+	CMP r3, #15
+	MOVGT r3, #0
+	B update_display
+
+dec:
+	PUSH {lr}
+	SUB r3, r3, #1
+	CMP r3, #0
+	MOVLT r3, #15
+	B update_display
+
+update_display:
+	ADD r4, r2, r3, LSL #2
+	LDR r4, [r4]
+	STR r4, [r1]
+	POP {pc}
+
+_end:
+	b _end
+.end

@@ -1,4 +1,5 @@
-// should have push button support, but doesn't
+// No errors, but r6 (index) gets reset each time. Maybe use .word index 0 and read from that?
+// Doens't clear push buttons edgecapture bit, meaning it's always on...
 
 /******************************************************************************
     Define symbols
@@ -48,14 +49,14 @@ _start:
 	
 	   /* 2. Configure the Generic Interrupt Controller (GIC). Use the given help function CONFIG_GIC! */
     // R0: The Interrupt ID to enable (only one supported for now)
-    MOV R0, #80  // UART Interrupt ID = 80
+    MOV R0, #73  // UART Interrupt ID = 80
     BL CONFIG_GIC // configure the ARM GIC
-	
+
 	LDR R0, =BTN_BASE
 	LDR R1, =0xF
 	STR R1, [R0, #0x08]
 
-	// Initialize the UART with receive interrupts enabled
+    // Initialize the UART with receive interrupts enabled
     LDR R0, =UART_CONTROL_REGISTER
     MOV R1, #0x1 // enable REceive interrupts
     STR R1, [R0]
@@ -64,6 +65,8 @@ _start:
 	LDR R2, =hex_patterns
 	LDR R4, [R2]
 	STR R4, [R0]
+	
+	mov r6, #0
 	
    /* 4. Change to the processor mode for the main program loop (for example supervisor mode) */
     /* 5. Enable the processor interrupts (IRQ in our case) */
@@ -79,43 +82,43 @@ SERVICE_IRQ:
     /* Read and acknowledge the interrupt at the GIC: Read the ICCIAR from the CPU Interface */
     LDR R4, =GIC_CPU_INTERFACE_BASE  // 0xFFFEC100
     LDR R5, [R4, #0x0C] // read current Interrupt ID from ICCIAR
+
+    /* 2. Check which device raised the interrupt */
+
+CHECK_BTN_INTERRUPT:
+	CMP R5, #73
+	BNE SERVICE_IRQ_DONE
+
+	BL BTN_INTERRUPT_HANDLER
 	
-CHECK_BUTTON_INTERRUPT:
-    CMP R5, #73           // Check if interrupt is from buttons (Interrupt ID = 73)
-    BNE SERVICE_IRQ_DONE  // Skip if not button interrupt
-
-    LDR R0, =BTN_BASE
-    LDR R1, [R0, #0x0C]   // Read Edgecapture register
-
-    TST R1, #0x1          // Check if button 0 is pressed
-    BEQ inc               // If yes, call increment routine
-
-    TST R1, #0x2          // Check if button 1 is pressed
-    BEQ dec               // If yes, call decrement routine
-
-    STR R1, [R0, #0x0C]   // Clear Edgecapture by writing back
-    B SERVICE_IRQ_DONE
-	
-	
-CHECK_UART_INTERRUPT:
-    CMP R5, #80  // UART Interrupt ID
-
-    BNE SERVICE_IRQ_DONE // if not recognized, some error handling or just return from interrupt
-
-    /*
-        3. Handle the specific device interrupt
-        and
-        4. Acknowledge the specific device interrupt
-    */
-    BL UART_INTERRUPT_HANDLER
-
 SERVICE_IRQ_DONE:
-    /* 5. Inform the GIC that the interrupt is handled */
-    STR R5, [R4, #0x10] // write to ICCEOIR
+	LDR r1, =BTN_BASE
+	BIC r1, r1, #0
 	
+/* 5. Inform the GIC that the interrupt is handled */
+    STR R5, [R4, #0x10] // write to ICCEOIR
+
 	/* 6. Return from interrupt */
     POP {R0-R7, LR}
     SUBS PC, LR, #4
+
+BTN_INTERRUPT_HANDLER:
+	push {r0-r7, lr}
+	ldr r0, =BTN_BASE
+	ldr r1, [r0]
+	AND r1, r1, #0xFF
+	STR r1, [r0]
+	
+	CMP r1, #0
+	BEQ inc
+	
+	CMP r1, #1
+	BEQ dec
+	
+	CMP r1, #2
+	BEQ _end
+	
+	POP {pc}
 
 UART_INTERRUPT_HANDLER:
     PUSH {LR}
@@ -176,26 +179,7 @@ CONFIG_GIC:
     STR R1, [R0]
     POP {PC}
 
-inc:
-	PUSH {r1-r4, lr}
-	ADD r3, r3, #1
-	CMP r3, #15
-	MOVGT r3, #0
-	B update_display
-
-dec:
-	SUB r3, r3, #1
-	CMP r3, #0
-	MOVLT r3, #15
-	B update_display
-
-update_display:
-	ADD r4, r2, r3, LSL #2
-	LDR r4, [r4]
-	STR r4, [r1]
-	POP {r1-r4, pc}
-
-/*********************************************************************
+/********************************************************************
     HELP FUNCTION!
     --------------
 Configure registers in the GIC for an individual Interrupt ID.
@@ -237,3 +221,28 @@ CONFIG_INTERRUPT:
      * (only) the appropriate byte */
     STRB R1, [R4]
     POP {R4-R5, PC}
+
+inc:
+	ADD r6, r6, #1
+	CMP r6, #15
+	MOVGT r6, #0
+	B update_display
+
+dec:
+	PUSH {lr}
+	SUB r6, r6, #1
+	CMP r6, #0
+	MOVLT r6, #15
+	B update_display
+
+update_display:
+	ldr r1, =DISPLAYS_BASE
+	ldr r2, =hex_patterns
+	ADD r3, r2, r6, LSL #2
+	LDR r4, [r3]
+	STR r4, [r1]
+	POP {r0-r7, pc}
+
+_end:
+	b _end
+.end

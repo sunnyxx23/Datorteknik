@@ -80,22 +80,22 @@ SERVICE_IRQ:
     LDR R4, =GIC_CPU_INTERFACE_BASE  // 0xFFFEC100
     LDR R5, [R4, #0x0C] // read current Interrupt ID from ICCIAR
 
-    /* 2. Check which device raised the interrupt */
-    CHECK_BTN_INTERRUPT:
+/* 2. Check which device raised the interrupt */
+CHECK_BTN_INTERRUPT:
         CMP R5, #73
         BNE SERVICE_IRQ_DONE
 
         BL BTN_INTERRUPT_HANDLER
 
-    CHECK_UART_INTERRUPT:
+CHECK_UART_INTERRUPT:
         cmp R5, #80
         BNE SERVICE_IRQ_DONE
         BL UART_INTERRUPT_HANDLER
 
 SERVICE_IRQ_DONE:
-	LDR r1, =BTN_BASE
-	BIC r1, r1, #0
-    /* 5. Inform the GIC that the interrupt is handled */
+    /* 	5. Inform the GIC that the interrupt is handled 
+		r5 should contain the ICCIAR ID (the button itself or the address for push buttons?)
+	*/ 
     LDR r4, =GIC_CPU_INTERFACE_BASE
     STR R5, [R4, #0x10] // write to ICCEOIR
 
@@ -104,20 +104,24 @@ SERVICE_IRQ_DONE:
     SUBS PC, LR, #4
 
 BTN_INTERRUPT_HANDLER:
-    PUSH {LR}
+    PUSH {r0-r7,LR}
 	LDR r0, =BTN_BASE
+
 	LDR r1, [r0]
-	AND r1, r1, #0xFF	
+	AND r1, r1, #0xFF
+
 	CMP r1, #0
 	BEQ inc
 	
-	CMP r1, #1
+	CMP r1, #2
 	BEQ dec
 	
-	CMP r1, #2
+	CMP r1, #4
 	BEQ _end
 	
-	POP {PC}
+	STR r1, [r0]
+	
+	POP {r0-r7, PC}
 
 UART_INTERRUPT_HANDLER:
     PUSH {LR}
@@ -247,7 +251,7 @@ update_display:
 	ADD r3, r2, r7, LSL #2
 	LDR r4, [r3]
 	STR r4, [r1]
-    POP {pc}
+    POP {r0-r7, pc}
 
 _end:
 	BAL _end

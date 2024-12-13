@@ -84,9 +84,8 @@ SERVICE_IRQ:
 CHECK_BTN_INTERRUPT:
         CMP R5, #73
         BNE SERVICE_IRQ_DONE
-
         BL BTN_INTERRUPT_HANDLER
-
+	
 CHECK_UART_INTERRUPT:
         cmp R5, #80
         BNE SERVICE_IRQ_DONE
@@ -104,20 +103,20 @@ SERVICE_IRQ_DONE:
     SUBS PC, LR, #4
 
 BTN_INTERRUPT_HANDLER:
-    PUSH {r0-r7,LR}
+    PUSH {r0-r7, lr}
 	LDR r0, =BTN_BASE
+	ADD r0, r0, #12
 
 	LDR r1, [r0]
-	AND r1, r1, #0xFF
 
-	CMP r1, #0
-	BEQ inc
+	CMP r1, #1
+	BLEQ inc
 	
 	CMP r1, #2
-	BEQ dec
+	BLEQ dec
 	
 	CMP r1, #4
-	BEQ _end
+	BLEQ _end
 	
 	STR r1, [r0]
 	
@@ -226,24 +225,29 @@ CONFIG_INTERRUPT:
     POP {R4-R5, PC}
 
 inc:
+	push {r0-r7, lr}
 	LDR r6, =counter
     LDR r7, [r6]
     ADD r7, r7, #1
 	CMP r7, #15
 	MOVGT r7, #0
     STR r7, [r6]
-	B update_display
+	BL update_display
+	pop {r0-r7, pc}
 
 dec:
+	push {r0-r7, lr}
 	LDR r6, =counter
     LDR r7, [r6]
     SUB r7, r7, #1
 	CMP r7, #0
 	MOVLT r7, #15
     STR r7, [r6]
-	B update_display
+	BL update_display
+	pop {r0-r7, pc}
 
 update_display:
+	push {r0-r7, lr}
 	LDR r1, =DISPLAYS_BASE
 	LDR r2, =hex_patterns
     LDR r6, =counter

@@ -74,8 +74,9 @@ _start:
     MSR CPSR_c, #0b01010011  // IRQ unmasked, MODE = SVC
 
 _main:
-	LDR r5, =UART_DATA_REGISTER            // Read UART status register
-	ANDS r6, r5, #0x8000
+	LDR r4, =UART_BASE            // Read UART status register
+	LDR r5, [r4]
+    ANDS r6, r5, #0x8000
 	BEQ _main           // No data available, keep polling
 	AND r5, r5, #0x00ff
 	
